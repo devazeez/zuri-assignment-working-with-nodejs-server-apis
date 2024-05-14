@@ -1,40 +1,75 @@
-const http = require("http");
-const os = require("os");
-const PORT = 3001;
+const http = require('http');
+const url = require('url');
+const { parse } = require('querystring');
+
+let db = [];
 
 const server = http.createServer((req, res) => {
-  // Enable CORS
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    const reqUrl = url.parse(req.url, true);
+    const { pathname } = reqUrl;
 
-  // Check for GET request
-  if (req.method === "GET" && req.url === "/system/info") {
-    const delay = Math.floor(Math.random() * 3000);
-
-    setTimeout(() => {
-      // Retrieve CPU and OS information
-      const userInfo = {
-        cpuArchitecture: os.arch(),
-        totalMemory: os.totalmem(),
-        freeMemory: os.freemem(),
-        platform: os.platform(),
-        type: os.type(),
-        uptime: os.uptime(),
-        userInfo: os.userInfo(),
-      };
-      // Send the user info as JSON response
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.write(JSON.stringify(userInfo));
-      res.end();
-    }, delay);
-  } else {
-    // If the route is not recognized, respond with a 404 error
-    res.writeHead(404, { "Content-Type": "text/plain" });
-    res.end("Not Found");
-  }
+    if (req.method === 'POST' && pathname === '/') {
+        let body = '';
+        req.on('data', chunk => {
+            body += chunk.toString();
+        });
+        req.on('end', () => {
+            const { title, comedian, year } = JSON.parse(body);
+            const id = db.length + 1;
+            const joke = { id, title, comedian, year };
+            console.log(joke)
+            db.push(joke);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              message: "Successfully added a new joke",
+              data: joke
+            }));
+        });
+    } else if (req.method === 'GET' && pathname === '/') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(({
+          message: "Jokes returned successfully",
+          data: db
+        })));
+    } else if (req.method === 'PATCH' && pathname.startsWith('/joke/')) {
+        const id = parseInt(pathname.split('/')[2]);
+        let body = '';
+        req.on('data', chunk => {
+            body += chunk.toString();
+        });
+        req.on('end', () => {
+            const { title, comedian, year } = JSON.parse(body);
+            db = db.map(joke => {
+                if (joke.id === id) {
+                    joke.title = title;
+                    joke.comedian = comedian;
+                    joke.year = year;
+                }
+                return joke;
+            });
+            const updatedJoke = db.find(joke => joke.id === id);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              message: "Successfully updated joke",
+              data: updatedJoke
+            }));
+        });
+    } else if (req.method === 'DELETE' && pathname.startsWith('/joke/')) {
+        const id = parseInt(pathname.split('/')[2]);
+        const deletedJoke = db.find(joke => joke.id === id);
+        db = db.filter(joke => joke.id !== id);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          message: "Successfully deleted joke",
+          data: deletedJoke
+        }));
+    } else {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('Not Found');
+    }
 });
 
-server.listen(PORT, () => {
-  console.log(`Server is currently live on port ${PORT}`);
+const port = 3000;
+server.listen(port, () => {
+    console.log(`Server running at http://localhost:${port}`);
 });
